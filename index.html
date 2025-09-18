@@ -1,484 +1,104 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <title>Interactive Bracelet — Hotspot Builder</title>
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <style>
-    :root { --accent:#0b69ff; --muted:#666; --bg:#fafafa; }
-    body{font-family:system-ui,Segoe UI,Roboto,Arial; margin:0; padding:20px; background:var(--bg); color:#123;}
-    .top {display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:12px}
-    .controls button,input[type=file]{padding:8px 12px;border-radius:8px;border:1px solid #ddd;background:#fff;cursor:pointer}
-    .controls button.primary{background:var(--accent);color:#fff;border-color:transparent}
-    .controls .mode {display:flex;gap:8px}
-    .note{font-size:13px;color:var(--muted)}
-    .layout{display:flex;gap:18px;align-items:flex-start}
-    .canvas-wrap{background:#fff;border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,0.08);padding:14px}
-    .canvas{width:720px;height:540px;position:relative;overflow:hidden;border-radius:6px;background:#eee;display:flex;align-items:center;justify-content:center}
-    #baseImg{max-width:100%;max-height:100%;display:block;user-select:none;pointer-events:none}
-    .hotspot{position:absolute;width:28px;height:28px;border-radius:50%;background:rgba(255,0,0,0.95);box-shadow:0 4px 12px rgba(0,0,0,0.18);border:2px solid #fff;cursor:grab;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:14px}
-    .hotspot:active{cursor:grabbing}
-    .sidebar{width:320px}
-    .card{background:#fff;padding:12px;border-radius:8px;box-shadow:0 6px 18px rgba(0,0,0,0.06);margin-bottom:12px}
-    label.small{display:block;font-size:13px;color:var(--muted);margin-bottom:6px}
-    .hotspot-list{max-height:280px;overflow:auto}
-    .hot-item{display:flex;justify-content:space-between;align-items:center;padding:8px;border-radius:6px;border:1px dashed #eee;margin-bottom:8px}
-    .btn-inline{background:#fff;border:1px solid #ddd;padding:6px 8px;border-radius:6px;cursor:pointer}
-    #popup{position:fixed;display:none;z-index:999;max-width:320px;max-height:70vh;overflow:auto;padding:12px;border-radius:10px;background:#fff;box-shadow:0 12px 30px rgba(0,0,0,0.18);border:1px solid #eee}
-    #popup img{max-width:100%;display:block}
-    #popup video{max-width:100%;display:block}
-    .editor-row{display:flex;gap:8px;margin-top:8px}
-    textarea{width:100%;min-height:80px;padding:8px;border-radius:8px;border:1px solid #ddd;resize:vertical}
-    .muted{font-size:12px;color:var(--muted)}
-    .small{font-size:13px}
-  </style>
+<meta charset="UTF-8">
+<title>Interactive Bracelet Hotspots</title>
+<style>
+  body { font-family: sans-serif; text-align: center; margin: 30px; background: #f9f9f9; }
+  #bracelet-container { position: relative; display: inline-block; }
+  #bracelet { max-width: 400px; border: 2px solid #ddd; border-radius: 10px; cursor: crosshair; }
+  .hotspot {
+    position: absolute;
+    width: 20px; height: 20px;
+    border-radius: 50%;
+    background: red;
+    cursor: pointer;
+    transform: translate(-50%, -50%);
+  }
+  .popup {
+    position: absolute;
+    background: white;
+    border: 1px solid #ccc;
+    padding: 10px;
+    border-radius: 6px;
+    display: none;
+    max-width: 200px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+    z-index: 10;
+  }
+  .popup img, .popup video {
+    max-width: 100%;
+  }
+</style>
 </head>
 <body>
-  <div class="top">
-    <div class="controls">
-      <label class="small">Step 1 — Upload base image</label>
-      <input id="baseUpload" type="file" accept="image/*" />
-      <button id="resetBase">Clear</button>
-    </div>
 
-    <div style="margin-left:12px" class="controls">
-      <label class="small">Step 2 — Add hotspots</label>
-      <div class="mode">
-        <button id="addModeBtn" class="btn-inline">Add hotspot</button>
-        <button id="editModeBtn" class="btn-inline">Edit mode</button>
-        <button id="previewBtn" class="primary">Preview</button>
-      </div>
-    </div>
+<h2>Interactive Bracelet Designer</h2>
+<p>Step 1: Upload your bracelet image → Step 2: Click to add hotspots → Step 3: Add text/image/video</p>
 
-    <div style="margin-left:12px" class="controls">
-      <label class="small">Save / Load</label>
-      <button id="downloadJSON">Download JSON</button>
-      <input id="loadJSON" type="file" accept="application/json" />
-    </div>
-  </div>
+<input type="file" id="upload" accept="image/*"><br><br>
 
-  <div class="layout">
-    <div class="canvas-wrap card">
-      <div class="muted small" style="margin-bottom:6px">Click "Add hotspot", then click the image to create a hotspot. Drag hotspots to reposition.</div>
-      <div id="canvas" class="canvas" tabindex="0">
-        <img id="baseImg" src="" alt="Base" />
-        <!-- hotspots appended here -->
-      </div>
-    </div>
-
-    <div class="sidebar">
-      <div class="card">
-        <div style="display:flex;justify-content:space-between;align-items:center">
-          <strong>Hotspots</strong>
-          <span id="hotCount" class="muted small">0</span>
-        </div>
-        <div class="hotspot-list" id="hotList" style="margin-top:8px"></div>
-        <div class="muted small">Click a hotspot in the list to edit or double-click its marker on canvas.</div>
-      </div>
-
-      <div class="card">
-        <strong>Tips</strong>
-        <ul style="padding-left:18px;margin:8px 0;color:var(--muted)">
-          <li>Export JSON to save everything (includes images & hotspot media as data URLs).</li>
-          <li>Load that JSON later to restore the project.</li>
-          <li>Large uploaded videos/images will enlarge the JSON file size.</li>
-        </ul>
-      </div>
-    </div>
-  </div>
-
-  <!-- editor modal (custom small) -->
-  <div id="editor" style="display:none;position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:1001;background:#fff;border-radius:10px;padding:14px;box-shadow:0 12px 30px rgba(0,0,0,0.18);width:420px;max-width:90%">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-      <strong>Edit Hotspot</strong>
-      <button id="closeEditor" class="btn-inline">Close</button>
-    </div>
-    <div class="small muted">You can add text or upload an image/video for this hotspot.</div>
-
-    <div style="margin-top:10px">
-      <label class="small">Popup text</label>
-      <textarea id="hotText"></textarea>
-
-      <div class="editor-row">
-        <div style="flex:1">
-          <label class="small">Upload image or video (optional)</label>
-          <input id="hotMedia" type="file" accept="image/*,video/*" />
-        </div>
-        <div style="width:130px">
-          <div class="muted small">Preview</div>
-          <div id="mediaPreview" style="width:120px;height:80px;border-radius:8px;border:1px solid #eee;display:flex;align-items:center;justify-content:center;overflow:hidden;background:#fafafa"></div>
-        </div>
-      </div>
-
-      <div style="display:flex;gap:8px;margin-top:10px;justify-content:flex-end">
-        <button id="deleteHot" class="btn-inline">Delete</button>
-        <button id="saveHot" class="btn-inline primary">Save</button>
-      </div>
-    </div>
-  </div>
-
-  <div id="popup"></div>
+<div id="bracelet-container">
+  <img id="bracelet" src="" alt="Bracelet">
+</div>
 
 <script>
-(() => {
-  const canvas = document.getElementById('canvas');
-  const baseImg = document.getElementById('baseImg');
-  const baseUpload = document.getElementById('baseUpload');
-  const resetBase = document.getElementById('resetBase');
+const upload = document.getElementById('upload');
+const bracelet = document.getElementById('bracelet');
+const container = document.getElementById('bracelet-container');
 
-  const addModeBtn = document.getElementById('addModeBtn');
-  const editModeBtn = document.getElementById('editModeBtn');
-  const previewBtn = document.getElementById('previewBtn');
+upload.addEventListener('change', e => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    bracelet.src = ev.target.result;
+  };
+  reader.readAsDataURL(file);
+});
 
-  const hotList = document.getElementById('hotList');
-  const hotCount = document.getElementById('hotCount');
+container.addEventListener('click', e => {
+  if (e.target !== bracelet) return; // only add hotspot on image
+  const rect = bracelet.getBoundingClientRect();
+  const x = e.clientX - rect.left;
+  const y = e.clientY - rect.top;
 
-  const editor = document.getElementById('editor');
-  const closeEditor = document.getElementById('closeEditor');
-  const hotText = document.getElementById('hotText');
-  const hotMedia = document.getElementById('hotMedia');
-  const mediaPreview = document.getElementById('mediaPreview');
-  const saveHot = document.getElementById('saveHot');
-  const deleteHot = document.getElementById('deleteHot');
+  // create hotspot
+  const hotspot = document.createElement('div');
+  hotspot.className = 'hotspot';
+  hotspot.style.left = `${x}px`;
+  hotspot.style.top = `${y}px`;
 
-  const popup = document.getElementById('popup');
-  const downloadJSON = document.getElementById('downloadJSON');
-  const loadJSON = document.getElementById('loadJSON');
+  // create popup
+  const popup = document.createElement('div');
+  popup.className = 'popup';
+  popup.style.left = `${x + 20}px`;
+  popup.style.top = `${y + 20}px`;
 
-  let mode = 'idle'; // 'idle' | 'add' | 'edit' | 'preview'
-  let hotspots = []; // array of objects {id, xPct, yPct, text, media:{type,dataUrl}}
-  let currentHotId = null;
-  let idCounter = 1;
-  let baseImageDataURL = null; // data url of base image
-
-  function setMode(m) {
-    mode = m;
-    addModeBtn.style.background = m === 'add' ? '#eef' : '#fff';
-    editModeBtn.style.background = m === 'edit' ? '#eef' : '#fff';
-    previewBtn.style.background = m === 'preview' ? 'var(--accent)' : 'var(--accent)';
-    previewBtn.style.color = m === 'preview' ? '#fff' : '#fff';
-    // in preview mode, disable Add/Edit highlighting
-    if (m === 'preview') {
-      addModeBtn.style.opacity = 0.7; editModeBtn.style.opacity = 0.7;
-    } else {
-      addModeBtn.style.opacity = 1; editModeBtn.style.opacity = 1;
-    }
+  // ask user what to add
+  const type = prompt("Enter 'text', 'image', or 'video':");
+  if (type === 'text') {
+    const text = prompt("Enter your message:");
+    popup.innerHTML = `<p>${text}</p>`;
+  } else if (type === 'image') {
+    const url = prompt("Paste image URL:");
+    popup.innerHTML = `<img src="${url}">`;
+  } else if (type === 'video') {
+    const url = prompt("Paste video URL (mp4):");
+    popup.innerHTML = `<video src="${url}" controls></video>`;
+  } else {
+    return; // cancel
   }
 
-  addModeBtn.addEventListener('click', () => setMode(mode === 'add' ? 'idle' : 'add'));
-  editModeBtn.addEventListener('click', () => setMode(mode === 'edit' ? 'idle' : 'edit'));
-  previewBtn.addEventListener('click', () => setMode(mode === 'preview' ? 'idle' : 'preview'));
+  container.appendChild(hotspot);
+  container.appendChild(popup);
 
-  // Load base image
-  baseUpload.addEventListener('change', (e) => {
-    const f = e.target.files[0];
-    if (!f) return;
-    const r = new FileReader();
-    r.onload = () => {
-      baseImageDataURL = r.result;
-      baseImg.src = r.result;
-    };
-    r.readAsDataURL(f);
+  // toggle popup on click
+  hotspot.addEventListener('click', () => {
+    popup.style.display = popup.style.display === 'block' ? 'none' : 'block';
   });
-
-  resetBase.addEventListener('click', () => {
-    baseImg.src = '';
-    baseImageDataURL = null;
-    hotspots = []; idCounter = 1; currentHotId = null;
-    renderHotspots();
-    renderHotList();
-  });
-
-  // Add hotspot on click (when mode==='add')
-  canvas.addEventListener('click', (e) => {
-    if (!baseImg.src) return;
-    if (mode !== 'add') return;
-    // get click relative to canvas
-    const rect = canvas.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
-    // percent coords
-    const xPct = (x / rect.width) * 100;
-    const yPct = (y / rect.height) * 100;
-    const id = 'H' + (idCounter++);
-    const newHot = { id, xPct, yPct, text: '', media: null };
-    hotspots.push(newHot);
-    renderHotspots();
-    renderHotList();
-    // open editor for new hotspot
-    openEditor(id);
-  });
-
-  // Create hotspot DOM element
-  function createHotElement(hot) {
-    const el = document.createElement('div');
-    el.className = 'hotspot';
-    el.dataset.id = hot.id;
-    el.style.left = hot.xPct + '%';
-    el.style.top = hot.yPct + '%';
-    el.style.transform = 'translate(-50%,-50%)';
-    el.textContent = (hot.id.replace('H',''));
-    // pointer drag
-    el.addEventListener('pointerdown', (ev) => {
-      ev.preventDefault();
-      el.setPointerCapture(ev.pointerId);
-      const rect = canvas.getBoundingClientRect();
-      const startX = ev.clientX;
-      const startY = ev.clientY;
-      const origLeft = parseFloat(el.style.left);
-      const origTop = parseFloat(el.style.top);
-
-      function moveHandler(e) {
-        const dx = ((e.clientX - startX) / rect.width) * 100;
-        const dy = ((e.clientY - startY) / rect.height) * 100;
-        let nx = origLeft + dx;
-        let ny = origTop + dy;
-        nx = Math.max(0, Math.min(100, nx));
-        ny = Math.max(0, Math.min(100, ny));
-        el.style.left = nx + '%';
-        el.style.top = ny + '%';
-      }
-
-      function upHandler(e) {
-        el.releasePointerCapture(ev.pointerId);
-        canvas.removeEventListener('pointermove', moveHandler);
-        document.removeEventListener('pointerup', upHandler);
-        // save new pos
-        const h = hotspots.find(hh => hh.id === el.dataset.id);
-        if (h) {
-          h.xPct = parseFloat(el.style.left);
-          h.yPct = parseFloat(el.style.top);
-          renderHotList();
-        }
-      }
-
-      canvas.addEventListener('pointermove', moveHandler);
-      document.addEventListener('pointerup', upHandler);
-    });
-
-    // click behavior depends on mode
-    el.addEventListener('click', (ev) => {
-      ev.stopPropagation();
-      const id = el.dataset.id;
-      if (mode === 'edit') {
-        openEditor(id);
-      } else if (mode === 'preview') {
-        openPopupById(id, ev.clientX, ev.clientY);
-      } else {
-        // default: open editor
-        openEditor(id);
-      }
-    });
-
-    el.addEventListener('dblclick', (ev) => {
-      ev.stopPropagation();
-      openEditor(el.dataset.id);
-    });
-
-    return el;
-  }
-
-  function renderHotspots() {
-    // remove old
-    Array.from(canvas.querySelectorAll('.hotspot')).forEach(n => n.remove());
-    // append in order
-    hotspots.forEach(h => {
-      const el = createHotElement(h);
-      canvas.appendChild(el);
-    });
-    hotCount.textContent = hotspots.length;
-  }
-
-  // Hotspot list
-  function renderHotList() {
-    hotList.innerHTML = '';
-    hotspots.forEach(h => {
-      const row = document.createElement('div');
-      row.className = 'hot-item';
-      const left = document.createElement('div');
-      left.innerHTML = `<strong>${h.id}</strong><div class="muted small">pos ${h.xPct.toFixed(1)}%, ${h.yPct.toFixed(1)}%</div>`;
-      const right = document.createElement('div');
-      const editBtn = document.createElement('button'); editBtn.textContent = 'Edit'; editBtn.className = 'btn-inline';
-      const previewBtn = document.createElement('button'); previewBtn.textContent = 'Preview'; previewBtn.className = 'btn-inline';
-      editBtn.onclick = () => openEditor(h.id);
-      previewBtn.onclick = (ev) => openPopupById(h.id, canvas.getBoundingClientRect().left + (canvas.clientWidth*h.xPct/100), canvas.getBoundingClientRect().top + (canvas.clientHeight*h.yPct/100));
-      right.appendChild(editBtn); right.appendChild(previewBtn);
-      row.appendChild(left); row.appendChild(right);
-      hotList.appendChild(row);
-    });
-  }
-
-  // Editor open
-  function openEditor(id) {
-    currentHotId = id;
-    const hot = hotspots.find(h => h.id === id);
-    if (!hot) return;
-    hotText.value = hot.text || '';
-    mediaPreview.innerHTML = '';
-    hotMedia.value = '';
-    if (hot.media && hot.media.dataUrl) {
-      if (hot.media.type.startsWith('video')) {
-        const v = document.createElement('video'); v.src = hot.media.dataUrl; v.controls = true; v.style.maxWidth='120px'; v.style.maxHeight='80px';
-        mediaPreview.appendChild(v);
-      } else {
-        const i = document.createElement('img'); i.src = hot.media.dataUrl; i.style.maxWidth='120px'; i.style.maxHeight='80px';
-        mediaPreview.appendChild(i);
-      }
-    } else {
-      mediaPreview.textContent = '—';
-      mediaPreview.style.color = '#999';
-    }
-    editor.style.display = 'block';
-  }
-
-  closeEditor.addEventListener('click', () => { editor.style.display='none'; currentHotId=null; });
-
-  hotMedia.addEventListener('change', (e) => {
-    const f = e.target.files[0];
-    if (!f) return;
-    const r = new FileReader();
-    r.onload = () => {
-      mediaPreview.innerHTML = '';
-      const url = r.result;
-      if (f.type.startsWith('video')) {
-        const v = document.createElement('video'); v.src = url; v.controls = true; v.style.maxWidth='120px'; v.style.maxHeight='80px';
-        mediaPreview.appendChild(v);
-      } else {
-        const i = document.createElement('img'); i.src = url; i.style.maxWidth='120px'; i.style.maxHeight='80px';
-        mediaPreview.appendChild(i);
-      }
-      // store temp on current hot object so save can commit
-      const h = hotspots.find(hh => hh.id === currentHotId);
-      if (h) h._tempMedia = { type: f.type, dataUrl: url };
-    };
-    r.readAsDataURL(f);
-  });
-
-  saveHot.addEventListener('click', () => {
-    const h = hotspots.find(hh => hh.id === currentHotId);
-    if (!h) return;
-    h.text = hotText.value.trim();
-    // if temp media set
-    if (h._tempMedia) {
-      h.media = { type: h._tempMedia.type, dataUrl: h._tempMedia.dataUrl };
-      delete h._tempMedia;
-    }
-    // if hotMedia input has files but _tempMedia didn't set (rare), handle it:
-    if (hotMedia.files && hotMedia.files[0] && !h.media) {
-      const f = hotMedia.files[0];
-      const r = new FileReader();
-      r.onload = () => {
-        h.media = { type: f.type, dataUrl: r.result };
-        finalizeSave();
-      };
-      r.readAsDataURL(f);
-    } else {
-      finalizeSave();
-    }
-    function finalizeSave() {
-      renderHotspots();
-      renderHotList();
-      editor.style.display='none';
-      currentHotId = null;
-    }
-  });
-
-  deleteHot.addEventListener('click', () => {
-    if (!confirm('Delete this hotspot?')) return;
-    hotspots = hotspots.filter(h => h.id !== currentHotId);
-    renderHotspots();
-    renderHotList();
-    editor.style.display='none';
-    currentHotId = null;
-  });
-
-  // Popup open for preview mode
-  function openPopupById(id, clientX, clientY) {
-    const h = hotspots.find(hh => hh.id === id);
-    if (!h) return;
-    openPopup(h, clientX, clientY);
-  }
-
-  function openPopup(h, clientX, clientY) {
-    popup.innerHTML = '';
-    if (h.text) {
-      const p = document.createElement('div'); p.textContent = h.text; popup.appendChild(p);
-    }
-    if (h.media && h.media.dataUrl) {
-      if (h.media.type && h.media.type.startsWith('video')) {
-        const v = document.createElement('video'); v.src = h.media.dataUrl; v.controls = true; v.style.maxWidth='100%'; popup.appendChild(v);
-      } else {
-        const img = document.createElement('img'); img.src = h.media.dataUrl; popup.appendChild(img);
-      }
-    }
-    if (!h.text && !(h.media && h.media.dataUrl)) {
-      popup.textContent = '(empty hotspot)';
-    }
-    // position: try near hotspot if client coords provided
-    if (clientX && clientY) {
-      popup.style.left = (clientX + 14) + 'px';
-      popup.style.top = (clientY + 14) + 'px';
-    } else {
-      // center
-      popup.style.left = '50%'; popup.style.top = '50%'; popup.style.transform = 'translate(-50%,-50%)';
-    }
-    popup.style.display = 'block';
-  }
-
-  document.addEventListener('click', (e) => {
-    // hide popup unless clicked a hotspot or editor
-    const isHot = e.target.closest('.hotspot');
-    const isEditor = e.target.closest('#editor');
-    if (!isHot && !isEditor) {
-      popup.style.display = 'none';
-      popup.style.transform = '';
-    }
-  });
-
-  // JSON export/import
-  downloadJSON.addEventListener('click', () => {
-    const payload = {
-      baseImageDataURL,
-      hotspots: hotspots.map(h => ({
-        id: h.id, xPct: h.xPct, yPct: h.yPct, text: h.text || '', media: h.media || null
-      }))
-    };
-    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url; a.download = 'bracelet-project.json';
-    document.body.appendChild(a); a.click(); a.remove();
-    URL.revokeObjectURL(url);
-  });
-
-  loadJSON.addEventListener('change', (e) => {
-    const f = e.target.files[0]; if (!f) return;
-    const r = new FileReader();
-    r.onload = () => {
-      try {
-        const obj = JSON.parse(r.result);
-        if (obj.baseImageDataURL) {
-          baseImageDataURL = obj.baseImageDataURL;
-          baseImg.src = baseImageDataURL;
-        }
-        hotspots = (obj.hotspots || []).map(h => ({ id: h.id || ('H' + (idCounter++)), xPct: h.xPct, yPct: h.yPct, text: h.text || '', media: h.media || null }));
-        // fix idCounter to avoid collisions
-        const maxId = hotspots.reduce((m,h)=> Math.max(m, parseInt(h.id.replace('H',''))||0),0);
-        idCounter = Math.max(idCounter, maxId + 1);
-        renderHotspots(); renderHotList();
-      } catch (err) {
-        alert('Invalid JSON file');
-      }
-    };
-    r.readAsText(f);
-  });
-
-  // initial
-  setMode('idle');
-  renderHotspots();
-  renderHotList();
-
-})();
+});
 </script>
+
 </body>
 </html>
