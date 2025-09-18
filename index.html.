@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Interactive Bracelet Portal</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <style>
+    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;display:flex;flex-direction:column;align-items:center;gap:18px;padding:28px;background:#fafafa;}
+    .controls{display:flex;gap:12px;align-items:center;}
+    .instructions{max-width:760px;color:#333;text-align:center;font-size:14px}
+    .bracelet-area{width:420px;height:420px;background:#fff;border-radius:8px;box-shadow:0 6px 18px rgba(0,0,0,0.08);display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden}
+    .bracelet{position:relative;width:380px;height:380px}
+    .bead{width:48px;height:48px;border-radius:50%;position:absolute;cursor:grab;background-size:cover;background-position:center;box-shadow:0 4px 10px rgba(0,0,0,0.12)}
+    .bead:active{cursor:grabbing}
+    #popup{display:none;position:fixed;background:#fff;border:1px solid #ddd;padding:8px 10px;border-radius:8px;box-shadow:0 6px 18px rgba(0,0,0,0.12);z-index:9999;max-width:260px}
+    .small{font-size:13px;color:#555}
+    button{padding:8px 12px;border-radius:6px;border:1px solid #ddd;background:#fff;cursor:pointer}
+    button.primary{background:#111;color:#fff;border-color:transparent}
+    input[type=file]{display:inline-block}
+  </style>
+</head>
+<body>
+  <h2>Interactive Bracelet Prototype</h2>
+  <div class="instructions">
+    Upload bead images (multiple). The page will render them as beads on a bracelet — click beads for popups and drag beads to rearrange.
+  </div>
+
+  <div class="controls">
+    <input id="fileInput" type="file" accept="image/*" multiple />
+    <button id="resetBtn">Use default demo beads</button>
+    <button id="downloadBtn" class="primary">Download layout (JSON)</button>
+  </div>
+
+  <div class="bracelet-area">
+    <div class="bracelet" id="bracelet"></div>
+  </div>
+
+  <div id="popup"></div>
+
+<script>
+(() => {
+  const bracelet = document.getElementById('bracelet');
+  const fileInput = document.getElementById('fileInput');
+  const resetBtn = document.getElementById('resetBtn');
+  const popup = document.getElementById('popup');
+  const downloadBtn = document.getElementById('downloadBtn');
+
+  // Default demo images (remote placeholders). Replace with /images/bead1.png etc. if you uploaded images to the repo.
+  const defaultImages = [
+    'https://via.placeholder.com/80/000000/ffffff?text=1',
+    'https://via.placeholder.com/80/222222/ff4444?text=M',
+    'https://via.placeholder.com/80/333333/ffffff?text=A',
+    'https://via.placeholder.com/80/111111/ff4444?text=B',
+    'https://via.placeholder.com/80/000000/ffffff?text=E',
+    'https://via.placeholder.com/80/222222/ff4444?text=L',
+    'https://via.placeholder.com/80/000000/ffffff?text=♥'
+  ];
+
+  let currentImages = defaultImages.slice();
+  let beadElements = [];
+
+  function renderBeads(images) {
+    bracelet.innerHTML = '';
+    beadElements = [];
+    const count = images.length;
+    const radius = 140;
+    const centre = { x:190, y:190 }; // bracelet box is 380
+    images.forEach((src, i) => {
+      const angle = (i / count) * (Math.PI * 2) - Math.PI/2;
+      const x = centre.x + radius * Math.cos(angle) - 24;
+      const y = centre.y + radius * Math.sin(angle) - 24;
+      const div = document.createElement('div');
+      div.className = 'bead';
+      div.style.left = x + 'px';
+      div.style.top = y + 'px';
+      div.style.backgroundImage = `url("${src}")`;
+      div.dataset.msg = `Bead ${i+1}`;
+      bracelet.appendChild(div);
+      beadElements.push(div);
+      makeInteractive(div);
+    });
+  }
+
+  // Show popup
+  function showPopup(text, clientX, clientY) {
+    popup.textContent = text;
+    popup.style.left = (clientX + 14) + 'px';
+    popup.style.top = (clientY + 14) + 'px';
+    popup.style.display = 'block';
+  }
+  function hidePopup(){ popup.style.display = 'none'; }
+
+  // Make bead draggable and clickable (pointer events)
+  function makeInteractive(el) {
+    el.addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      showPopup(el.dataset.msg || 'Bead', ev.clientX, ev.clientY);
+    });
+
+    // Pointer drag
+    el.addEventListener('pointerdown', (ev) => {
+      ev.preventDefault();
+      el.setPointerCapture(ev.pointerId);
+      const startX = ev.clientX;
+      const startY = ev.clientY;
+      const rect = bracelet.getBoundingClientRect();
+      const beadRect = el.getBoundingClientRect();
+      const offsetX = startX - beadRect.left;
+      const offsetY = startY - beadRect.top;
+
+      function moveHandler(e) {
+        const nx = e.clientX - rect.left - offsetX;
+        const ny = e.clientY - rect.top - offsetY;
+        // keep inside bracelet box
+        el.style.left = Math.max(0, Math.min(rect.width - beadRect.width, nx)) + 'px';
+        el.style.top = Math.max(0, Math.min(rect.height - beadRect.height, ny)) + 'px';
+      }
+
+      function upHandler(e) {
+        el.releasePointerCapture(ev.pointerId);
+        bracelet.removeEventListener('pointermove', moveHandler);
+        document.removeEventListener('pointerup', upHandler);
+      }
+
+      bracelet.addEventListener('pointermove', moveHandler);
+      document.addEventListener('pointerup', upHandler);
+    });
+  }
+
+  // File input handler: load images as data URLs then render
+  fileInput.addEventListener('change', (e) => {
+    const files = Array.from(e.target.files).filter(f => f.type.startsWith('image/'));
+    if (!files.length) return;
+    Promise.all(files.map(f => new Promise((res) => {
+      const r = new FileReader();
+      r.onload = () => res(r.result);
+      r.readAsDataURL(f);
+    }))).then(dataUrls => {
+      currentImages = dataUrls;
+      renderBeads(currentImages);
+    });
+  });
+
+  resetBtn.addEventListener('click', () => {
+    currentImages = defaultImages.slice();
+    renderBeads(currentImages);
+  });
+
+  // Hide popup when clicking outside beads
+  document.addEventListener('click', (e) => {
+    if (!e.target.classList.contains('bead')) hidePopup();
+  });
+
+  // Download layout (positions + messages) as JSON
+  downloadBtn.addEventListener('click', () => {
+    const layout = beadElements.map(b => ({
+      left: b.style.left, top: b.style.top, msg: b.dataset.msg, bg: b.style.backgroundImage
+    }));
+    const blob = new Blob([JSON.stringify(layout, null, 2)], {type:'application/json'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = 'bracelet-layout.json';
+    document.body.appendChild(a); a.click(); a.remove();
+    URL.revokeObjectURL(url);
+  });
+
+  // Initial render with defaults
+  renderBeads(currentImages);
+})();
+</script>
+</body>
+</html>
