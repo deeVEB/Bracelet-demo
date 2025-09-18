@@ -2,41 +2,26 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Interactive Bracelet Hotspots</title>
+<title>Bracelet Designer</title>
 <style>
-  body { font-family: sans-serif; text-align: center; margin: 30px; background: #f9f9f9; }
-  #bracelet-container { position: relative; display: inline-block; }
+  body { font-family: sans-serif; text-align: center; margin: 20px; background: #f9f9f9; }
+  #bracelet-container { position: relative; display: inline-block; margin-top: 20px; }
   #bracelet { max-width: 400px; border: 2px solid #ddd; border-radius: 10px; cursor: crosshair; }
   .hotspot {
-    position: absolute;
-    width: 20px; height: 20px;
-    border-radius: 50%;
-    background: red;
-    cursor: pointer;
+    position: absolute; width: 20px; height: 20px;
+    border-radius: 50%; background: red; cursor: pointer;
     transform: translate(-50%, -50%);
   }
-  .popup {
-    position: absolute;
-    background: white;
-    border: 1px solid #ccc;
-    padding: 10px;
-    border-radius: 6px;
-    display: none;
-    max-width: 200px;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
-    z-index: 10;
-  }
-  .popup img, .popup video {
-    max-width: 100%;
-  }
+  #export { margin-top: 20px; padding: 10px 20px; }
 </style>
 </head>
 <body>
 
-<h2>Interactive Bracelet Designer</h2>
-<p>Step 1: Upload your bracelet image → Step 2: Click to add hotspots → Step 3: Add text/image/video</p>
+<h2>Bracelet Designer (Private)</h2>
+<p>Upload your bracelet image, click to add hotspots, then export the design.</p>
 
-<input type="file" id="upload" accept="image/*"><br><br>
+<input type="file" id="upload" accept="image/*"><br>
+<button id="export">Export Design</button>
 
 <div id="bracelet-container">
   <img id="bracelet" src="" alt="Bracelet">
@@ -46,6 +31,9 @@
 const upload = document.getElementById('upload');
 const bracelet = document.getElementById('bracelet');
 const container = document.getElementById('bracelet-container');
+const exportBtn = document.getElementById('export');
+let hotspots = [];
+let braceletImage = "";
 
 upload.addEventListener('change', e => {
   const file = e.target.files[0];
@@ -53,52 +41,48 @@ upload.addEventListener('change', e => {
   const reader = new FileReader();
   reader.onload = ev => {
     bracelet.src = ev.target.result;
+    braceletImage = ev.target.result;
   };
   reader.readAsDataURL(file);
 });
 
 container.addEventListener('click', e => {
-  if (e.target !== bracelet) return; // only add hotspot on image
+  if (e.target !== bracelet) return;
   const rect = bracelet.getBoundingClientRect();
-  const x = e.clientX - rect.left;
-  const y = e.clientY - rect.top;
+  const x = ((e.clientX - rect.left) / rect.width) * 100;
+  const y = ((e.clientY - rect.top) / rect.height) * 100;
 
-  // create hotspot
   const hotspot = document.createElement('div');
   hotspot.className = 'hotspot';
-  hotspot.style.left = `${x}px`;
-  hotspot.style.top = `${y}px`;
+  hotspot.style.left = `${x}%`;
+  hotspot.style.top = `${y}%`;
 
-  // create popup
-  const popup = document.createElement('div');
-  popup.className = 'popup';
-  popup.style.left = `${x + 20}px`;
-  popup.style.top = `${y + 20}px`;
-
-  // ask user what to add
-  const type = prompt("Enter 'text', 'image', or 'video':");
+  const type = prompt("Popup type: text, image, or video?");
+  let content = "";
   if (type === 'text') {
-    const text = prompt("Enter your message:");
-    popup.innerHTML = `<p>${text}</p>`;
+    content = prompt("Enter message:");
   } else if (type === 'image') {
-    const url = prompt("Paste image URL:");
-    popup.innerHTML = `<img src="${url}">`;
+    content = prompt("Enter image URL:");
   } else if (type === 'video') {
-    const url = prompt("Paste video URL (mp4):");
-    popup.innerHTML = `<video src="${url}" controls></video>`;
+    content = prompt("Enter video URL (mp4):");
   } else {
-    return; // cancel
+    return;
   }
 
   container.appendChild(hotspot);
-  container.appendChild(popup);
+  hotspots.push({x, y, type, content});
+});
 
-  // toggle popup on click
-  hotspot.addEventListener('click', () => {
-    popup.style.display = popup.style.display === 'block' ? 'none' : 'block';
-  });
+exportBtn.addEventListener('click', () => {
+  const data = { braceletImage, hotspots };
+  const blob = new Blob([JSON.stringify(data)], {type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'bracelet.json';
+  a.click();
+  URL.revokeObjectURL(url);
 });
 </script>
-
 </body>
 </html>
