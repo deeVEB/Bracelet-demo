@@ -1,1 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Interactive Bracelet — Viewer</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <style>
+    body{font-family:system-ui,Segoe UI,Roboto,Arial; margin:0; padding:20px; background:#fafafa; color:#123; text-align:center}
+    .canvas-wrap{background:#fff;border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,0.08);padding:14px;display:inline-block}
+    .canvas{width:720px;height:540px;position:relative;overflow:hidden;border-radius:6px;background:#eee;display:flex;align-items:center;justify-content:center}
+    #baseImg{max-width:100%;max-height:100%;display:block;user-select:none;pointer-events:none}
+    .hotspot{position:absolute;width:28px;height:28px;border-radius:50%;background:rgba(255,0,0,0.95);box-shadow:0 4px 12px rgba(0,0,0,0.18);border:2px solid #fff;cursor:pointer;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:14px}
+    #popup{position:fixed;display:none;z-index:999;max-width:320px;max-height:70vh;overflow:auto;padding:12px;border-radius:10px;background:#fff;box-shadow:0 12px 30px rgba(0,0,0,0.18);border:1px solid #eee}
+    #popup img{max-width:100%;display:block}
+    #popup video{max-width:100%;display:block}
+  </style>
+</head>
+<body>
+  <h2>Interactive Bracelet</h2>
+  <p>Click the hotspots to see messages.</p>
 
+  <div class="canvas-wrap">
+    <div id="canvas" class="canvas">
+      <img id="baseImg" src="" alt="Bracelet" />
+    </div>
+  </div>
+
+  <div id="popup"></div>
+
+<script>
+(async () => {
+  const canvas = document.getElementById('canvas');
+  const baseImg = document.getElementById('baseImg');
+  const popup = document.getElementById('popup');
+
+  // Load exported JSON (must be in same folder as this file)
+  const response = await fetch('bracelet-project.json');
+  const project = await response.json();
+
+  if (project.baseImageDataURL) {
+    baseImg.src = project.baseImageDataURL;
+  }
+
+  (project.hotspots || []).forEach(h => {
+    const el = document.createElement('div');
+    el.className = 'hotspot';
+    el.style.left = h.xPct + '%';
+    el.style.top = h.yPct + '%';
+    el.style.transform = 'translate(-50%,-50%)';
+    el.textContent = (h.id || '').replace('H','');
+
+    el.addEventListener('click', (ev) => {
+      openPopup(h, ev.clientX, ev.clientY);
+    });
+
+    canvas.appendChild(el);
+  });
+
+  function openPopup(h, clientX, clientY) {
+    popup.innerHTML = '';
+    if (h.text) {
+      const p = document.createElement('div'); 
+      p.textContent = h.text; 
+      popup.appendChild(p);
+    }
+    if (h.media && h.media.dataUrl) {
+      if (h.media.type && h.media.type.startsWith('video')) {
+        const v = document.createElement('video'); 
+        v.src = h.media.dataUrl; 
+        v.controls = true; 
+        v.style.maxWidth='100%'; 
+        popup.appendChild(v);
+      } else {
+        const img = document.createElement('img'); 
+        img.src = h.media.dataUrl; 
+        popup.appendChild(img);
+      }
+    }
+    if (!h.text && !(h.media && h.media.dataUrl)) {
+      popup.textContent = '(empty hotspot)';
+    }
+    popup.style.left = (clientX + 14) + 'px';
+    popup.style.top = (clientY + 14) + 'px';
+    popup.style.display = 'block';
+  }
+
+  document.addEventListener('click', (e) => {
+    const isHot = e.target.closest('.hotspot');
+    if (!isHot) popup.style.display = 'none';
+  });
+})();
+</script>
+</body>
+</html>
